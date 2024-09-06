@@ -1,0 +1,37 @@
+[bot]
+channel = "@chumkassa"
+subscribe_guard = true
+
+start = '''
+Привет, {name} {last_name}
+Пополнение/Вывод средств из 1X!
+
+📥Пополнение: 0%
+📤Вывод: 0%
+👨‍💻Работаем 24/7
+
+👨‍💻Служба поддержки: @zero1win
+💕Kанал : @chumkassa
+🔐Ваши транзакции Защищены Финансовой службой 1X!
+'''
+
+start_buttons = [
+    "📥ПОПОЛНЕНИЕ", 
+    "📤ВЫВОД",
+    "🍆Инструкция",
+    "🏳️‍🌈Перевести на кыргызский"
+]
+
+replenish_message= '''
+Выберите необходимый способ для пополнения!
+'''
+replenish_buttons = [
+    'MBANK',
+    'OptimaBank',
+    'BANKA огурцов',
+    'Ebank',
+]
+
+flood_message = 'Не так быстро!' 
+
+chosen_method = "Выбран метод оплаты: {method}"

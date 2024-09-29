@@ -34,4 +34,13 @@ replenish_buttons = [
 
 flood_message = 'Не так быстро!' 
 
-chosen_method = "Выбран метод оплаты: {method}"
+handle_xid = 'Enter your xbet ID !' 
+invalid_xid = 'Sorry invalid xbet id , please recheck your id!' 
+
+handle_price = 'Enter price between 3000 and 10000!' 
+invalid_price = 'Invalid price , enter between 3000 and 10000 !' 
+
+handle_xid = 'Handle xid!' 
+invalid_xid = 'Invalid xid!' 
+check_photo = "Check photo please "
+chosen_method = "Выбран метод оплаты: {method} \n Введите ФИО {method} "

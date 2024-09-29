@@ -14,6 +14,8 @@ class App:
         self._load_settings()
         self._token = os.environ['TOKEN']
         self._bot = telebot.TeleBot(self._token)
+        self._min_price = 3000
+        self._max_price = 100000
     
     @property
     def bot(self):

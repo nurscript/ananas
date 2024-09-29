@@ -1,5 +1,4 @@
-from service import BotService
-
+from service import *
 import telebot
 from telebot import types
 
@@ -21,10 +20,31 @@ if __name__ =="__main__":
     def choose_payment(message: types.Message):
         service.choose_payment(message)
     
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_XID)
+    def handle_xid(message: types.Message):
+        service.handle_xid(message) 
+
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_NAME)
+    def handle_name(message: types.Message):
+        service.handle_name(message) 
+
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PRICE)
+    def handle_name(message: types.Message):
+        service.handle_price(message) 
+
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PHOTO)
+    def handle_photo_check(message: types.Message):
+        service.handle_photo_check(message) 
+
+
     @bot.callback_query_handler(func=service.replenish_methods())
     def callback_query(call: types.CallbackQuery):
         service.chosen_method(call)
     
+    
+    @bot.message_handler(func=lambda message: True)
+    def handle_unknown(message):
+        service.bot.send_message(message.chat.id, "Unknown command. Please type 'payment' to start the process.")
 
     bot.infinity_polling()
 

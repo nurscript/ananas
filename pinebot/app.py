@@ -1,5 +1,5 @@
 import os
-import tomllib
+import toml
 import telebot
 # System settings level 
 # Base app
@@ -27,8 +27,8 @@ class App:
     
     # depends on self._lang
     def _load_settings(self):
-        with open(settings[self._lang],  "rb") as f:
-            self._configuration = tomllib.load(f)
+        with open(settings[self._lang],  "rt") as f:
+            self._configuration = toml.load(f)
 
     def toggle_lang(self):
         self._lang = "ky" if self._lang == "ru" else "ru"

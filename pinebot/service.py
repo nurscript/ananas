@@ -3,6 +3,8 @@ from app import App
 from utils import flood_guard
 import requests
 from pathlib import Path
+from collections import defaultdict
+
 # Define the different states a user can be in
 STATE_WAITING_FOR_NAME = 1
 STATE_WAITING_FOR_XID = 2
@@ -22,8 +24,8 @@ class BotService(App):
         super().__init__(lang)
 
         # Store user states and data
-        self._user_states = {}
-        self._user_data = {}
+        self._user_states = defaultdict(dict)
+        self._user_data = defaultdict(dict)
         self.checks_path = Path("checks")
 
     def home(self, message: types.Message):
@@ -93,7 +95,7 @@ class BotService(App):
             self.bot.send_message(chat_id, self.cfg.get("invalid_xid"))
             return
         self._user_data[chat_id][FIELD_XID] = msg
-        self._user_states = STATE_WAITING_FOR_PRICE
+        self._user_states[chat_id] = STATE_WAITING_FOR_PRICE
         # move to next state
         self.bot.send_message(chat_id, self.cfg.get("handle_price"))
 
@@ -103,20 +105,23 @@ class BotService(App):
         msg: str = message.text
         if not msg.isdecimal():
             self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            return
         price = int(msg)
         if not self._min_price<=price<=self._max_price:
             self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            return
         
         self._user_data[chat_id][FIELD_PRICE] = price
-        self._user_states = STATE_WAITING_FOR_PHOTO
+        self._user_states[chat_id] = STATE_WAITING_FOR_PHOTO
         self.bot.send_message(chat_id, self.cfg.get("check_photo"))
     
     def handle_photo_check(self, message: types.Message):
-        chat_id = message.chat.type
+        chat_id = message.chat.id
         # identify the type of message 
-
+        print(message.content_type)
         if message.content_type != "photo":
             self.bot.send_message(chat_id, "only photo is allowed")
+            return
         
         file_info = self.bot.get_file(message.photo[0].file_id)
         downloaded_file = self.bot.download_file(file_info.file_path)

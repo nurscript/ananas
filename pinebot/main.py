@@ -32,7 +32,7 @@ if __name__ =="__main__":
     def handle_name(message: types.Message):
         service.handle_price(message) 
 
-    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PHOTO)
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PHOTO, content_types=['text', 'photo'])
     def handle_photo_check(message: types.Message):
         service.handle_photo_check(message) 
 

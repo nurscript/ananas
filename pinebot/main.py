@@ -1,24 +1,10 @@
 from service import *
 import telebot
 from telebot import types
-import firebase_admin
-from firebase_admin import credentials, firestore, storage
-
-
 
 if __name__ =="__main__":
-    
-    
-    cred = credentials.Certificate("devilstore-95042-firebase-adminsdk-42e0j-f98e9de63c.json")
-    firebase_admin.initialize_app(cred, {
-        'storageBucket': 'devilstore-95042.appspot.com'
-    })
 
-    # Connect to Firestore
-    db = firestore.client()
-    bucket = storage.bucket()
-
-    service = BotService(db, bucket)
+    service = BotService()
     bot: telebot.TeleBot = service.bot
 
     # bot start handler
@@ -30,35 +16,51 @@ if __name__ =="__main__":
     def start(message: types.Message):
         service.home(message)
 
-    @bot.message_handler(regexp=service.payment_option)
+    @bot.message_handler(regexp=service.payment_option(0))
     def choose_payment(message: types.Message):
         service.choose_payment(message)
     
-    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_XID)
+    @bot.message_handler(regexp=service.payment_option(1))
+    def choose_witdraw(message: types.Message):
+        service.choose_withdraw(message)
+    
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_XID | PAYMENT_STATE)
     def handle_xid(message: types.Message):
         service.handle_xid(message) 
+   
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_XID | WITHDRAW_STATE)
+    def handle_xid_withdraw(message: types.Message):
+        service.handle_xid_withdraw(message) 
 
-    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_NAME)
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_NAME | PAYMENT_STATE)
     def handle_name(message: types.Message):
         service.handle_name(message) 
 
-    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PRICE)
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PRICE | PAYMENT_STATE)
     def handle_name(message: types.Message):
-        service.handle_price(message) 
+        service.handle_price(message, PAYMENT_STATE)
+    
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PRICE | WITHDRAW_STATE)
+    def handle_name(message: types.Message):
+        service.handle_price(message, WITHDRAW_STATE) 
 
-    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PHOTO, content_types=['text', 'photo'])
+    @bot.message_handler(func=lambda message: service.user_state.get(message.chat.id) == STATE_WAITING_FOR_PHOTO | PAYMENT_STATE, content_types=['text', 'photo'])
     def handle_photo_check(message: types.Message):
         service.handle_photo_check(message) 
 
 
-    @bot.callback_query_handler(func=service.replenish_methods())
+    @bot.callback_query_handler(func=lambda call:  int(call.data) & PAYMENT_STATE )
     def callback_query(call: types.CallbackQuery):
         service.chosen_method(call)
     
     
+    @bot.callback_query_handler(func=lambda call:  int(call.data) & WITHDRAW_STATE )
+    def callback_query_payment(call: types.CallbackQuery):
+        service.withdraw_option(call)
+
+    
     @bot.message_handler(func=lambda message: True)
     def handle_unknown(message):
-        service.bot.send_message(message.chat.id, "Unknown command. Please type 'payment' to start the process.")
-
+        service.misunderstand(message)
     bot.infinity_polling()
 

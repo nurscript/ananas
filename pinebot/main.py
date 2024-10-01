@@ -1,10 +1,24 @@
 from service import *
 import telebot
 from telebot import types
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
+
+
 
 if __name__ =="__main__":
     
-    service = BotService()
+    
+    cred = credentials.Certificate("devilstore-95042-firebase-adminsdk-42e0j-f98e9de63c.json")
+    firebase_admin.initialize_app(cred, {
+        'storageBucket': 'devilstore-95042.appspot.com'
+    })
+
+    # Connect to Firestore
+    db = firestore.client()
+    bucket = storage.bucket()
+
+    service = BotService(db, bucket)
     bot: telebot.TeleBot = service.bot
 
     # bot start handler

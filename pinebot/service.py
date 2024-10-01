@@ -4,6 +4,8 @@ from utils import flood_guard
 import requests
 from pathlib import Path
 from collections import defaultdict
+from firebase_admin import firestore
+import os
 
 # Define the different states a user can be in
 STATE_WAITING_FOR_NAME = 1
@@ -20,9 +22,11 @@ FIELD_PRICE = "price"
 
 
 class BotService(App):
-    def __init__(self, lang="ru") -> None:
+    def __init__(self, db, bucket , lang="ru") -> None:
         super().__init__(lang)
-
+        ## fire store db
+        self._db = db
+        self._bucket = bucket
         # Store user states and data
         self._user_states = defaultdict(dict)
         self._user_data = defaultdict(dict)
@@ -123,7 +127,7 @@ class BotService(App):
             self.bot.send_message(chat_id, "only photo is allowed")
             return
         
-        file_info = self.bot.get_file(message.photo[0].file_id)
+        file_info = self.bot.get_file(message.photo[-1].file_id)
         downloaded_file = self.bot.download_file(file_info.file_path)
         photo_path = self.checks_path / f"{chat_id}_check.jpg"
         with open(photo_path, 'wb') as f:
@@ -131,26 +135,37 @@ class BotService(App):
 
         self._user_data[chat_id][FIELD_PHOTO] = photo_path
 
-        try:
-            response = requests.post(
-                'http://localhost:8000/api/payment', 
-                data={'bank':self._user_data[chat_id][FIELD_BANK] ,
-                      'name': self._user_data[chat_id][FIELD_NAME], 
-                      'xid': self._user_data[chat_id][FIELD_XID], 
-                      'price': self._user_data[chat_id][FIELD_PRICE]},
-                files={'photo': open(photo_path, 'rb')}
-            )
-            
-            if response.status_code == 200:
-                self.bot.send_message(chat_id, "Your payment information has been successfully submitted. Wait for updates soon.")
-            else:
-                self.bot.send_message(chat_id, "There was an error submitting your information. Please try again later.")
-        except Exception as e:
-            self.bot.send_message(chat_id, f"Error: {e}")
+        image_url = self.upload_check_image(photo_path, "payments/" + os.path.basename(photo_path))
+        self.add_user_data(self._user_data[chat_id][FIELD_XID], self._user_data[chat_id][FIELD_NAME],
+                           self._user_data[chat_id][FIELD_BANK],self._user_data[chat_id][FIELD_PRICE],
+                            image_url)
         
+        self.bot.send_message(chat_id, self.cfg.get("report_payment").format(
+            name=self._user_data[chat_id][FIELD_NAME],
+            bank=self._user_data[chat_id][FIELD_BANK],
+            xid=self._user_data[chat_id][FIELD_XID],
+            price=self._user_data[chat_id][FIELD_PRICE]
+        ))
         del self._user_states[chat_id]
         del self._user_data[chat_id]
+    
+    def add_user_data(self, user_id, name, bank, price,photo_url):
+        doc_ref = self._db.collection('payment').document(user_id)
+        doc_ref.set({
+            'name': name,
+            'bank': bank,
+            'price': price,
+            'photo': photo_url
+        })
 
+    def upload_check_image(self, image_path, image_name):
+        # Upload an image to Firebase Storage
+        blob = self._bucket.blob(image_name)
+        blob.upload_from_filename(image_path)
+        # Make the image publicly accessible
+        blob.make_public()
+        # Get the public URL of the uploaded image
+        return blob.public_url
         
     
 

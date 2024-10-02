@@ -66,7 +66,11 @@ if __name__ =="__main__":
     @bot.callback_query_handler(func=lambda call:  int(call.data) & WITHDRAW_STATE )
     def callback_query_payment(call: types.CallbackQuery):
         service.withdraw_option(call)
-
+    
+    @bot.callback_query_handler(func=lambda call:  int(call.data) & INSTRUCTION_STATE )
+    def callback_get_tutorial(call: types.CallbackQuery):
+        service.get_tutorial(call)
+    
     
     @bot.message_handler(func=lambda message: True)
     def handle_unknown(message):

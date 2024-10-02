@@ -27,12 +27,14 @@ replenish_message= '''
 '''
 replenish_buttons = [
     'MBANK',
-    'OptimaBank'
+    'OptimaBank',
+    'Elcart'
 ]
 
 withdraw_buttons = [
     'MBANK',
-    'OptimaBank'
+    'OptimaBank',
+    'Elcart'
 ]
 withdraw_message = '''
     Выберите метод для вывода средств 

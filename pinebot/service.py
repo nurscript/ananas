@@ -52,6 +52,7 @@ class PaymentDTO:
     photo: str
     price: int
     ever_paid: bool = False
+    approved: str = "neutral"
 
 
     
@@ -199,6 +200,7 @@ class BotService(App):
         self._user_states[chat_id] = STATE_WAITING_FOR_PRICE | WITHDRAW_STATE
         if not self._user_data[chat_id].get(FIELD_PAID):
             self.bot.send_message(chat_id, self.cfg.get('withdraw_conditions'))
+            self._clean(chat_id)
             return
         
         text = self.cfg.get("handle_price")
@@ -284,14 +286,17 @@ class BotService(App):
             self._user_states[chat_id] = 0
     
     def _add_user_data(self, dto: PaymentDTO):
-        doc_ref = self._db.collection('payment').document(str(dto.user_id))
-        dt = asdict(dto)
-        print(dt)
-        doc_ref.set(dt)
+        doc_ref = self._db.collection('payment').add(asdict(dto))
+        doc_ref[1].on_snapshot(self.on_snapshot)
 
     def on_snapshot(self, doc_snapshot, changes, read_time):
-        for doc in doc_snapshot:
-            print(f"received document snapshot: {doc.id}")
+        for change in changes:
+            if change.type.name == 'ADDED':
+                print(f"New document: {change.document.id} => {change.document.to_dict()}")
+            elif change.type.name == 'MODIFIED':
+                print(f"Modified document: {change.document.id} => {change.document.to_dict()}")
+            elif change.type.name == 'REMOVED':
+                print(f"Removed document: {change.document.id}")
             
     
     def _upload_check_image(self, image_path, image_name):

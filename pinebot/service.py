@@ -8,6 +8,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore, storage
 import os
 from datetime import datetime
+from dataclasses import dataclass, asdict
 
 # Define the different states using powers of 2
 STATE_WAITING_FOR_NAME = 1 << 0  # 0001
@@ -21,11 +22,12 @@ PAYMENT_STATE = 1 << 6           # 1000000
 
 BANK_MBANK = 1 << 0
 BANK_OPTIMA = 1 << 1
+BANK_ELCART = 1 << 2
 BANK_CRYPTO = 1 << 3
 BANK_ODENGI = 1 << 4
 
 BANK_MASK = (
-    BANK_MBANK | BANK_OPTIMA | BANK_CRYPTO | BANK_ODENGI
+    BANK_MBANK | BANK_OPTIMA | BANK_ELCART | BANK_CRYPTO | BANK_ODENGI
 )
 
 
@@ -38,13 +40,18 @@ FIELD_PAID = "ever_paid"
 
 GUARD_TIME = 2 # prevent flood for 2 seconds
 
+@dataclass
 class PaymentDTO:
-    def __init__(self, name, bank, xid, price, time_stamp) -> None:
-        self._name = name
-        self._bank = bank
-        self._xid = xid
-        self._price = price
-        self._time = time_stamp
+    user_id: int
+    name: str 
+    bank: str
+    xid: str
+    time: datetime
+    photo: str
+    price: int
+    ever_paid: bool = False
+
+
     
 class BotService(App):
     def __init__(self, lang="ru") -> None:
@@ -88,8 +95,8 @@ class BotService(App):
             replenish_otions.append(btn)
         inline_markup.add(*replenish_otions)
 
-        markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True, resize_keyboard=True)
-        markup.add(types.KeyboardButton('Cancel'))
+        markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
+        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
         text = self.cfg.get('replenish_message')
         self.bot.send_message(chat_id, '📥',reply_markup=markup)
         self.bot.send_message(chat_id, text, reply_markup=inline_markup)
@@ -104,30 +111,36 @@ class BotService(App):
             withdraw_options.append(btn)
         inline_markup.add(*withdraw_options)
     
-        markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True, resize_keyboard=True)
-        markup.add(types.KeyboardButton('Cancel'))
+        markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
+        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
         text = self.cfg.get('withdraw_message')
         self.bot.send_message(chat_id, '📤',reply_markup=markup)
         self.bot.send_message(chat_id, text, reply_markup=inline_markup)
     
 
     def flood_message(self, message: types.Message):
+        message.te
         self.bot.reply_to(message, self.cfg.get('flood_message'))
 
     def payment_option(self, option):
-        option = self.cfg.get("start_buttons")[option]
-        return f'^{option}$'
+        option_ru = self.options['ru'].get("start_buttons")[option]
+        option_ky = self.options['ky'].get("start_buttons")[option]
+        return lambda message: message.text in (option_ru, option_ky)
     
-    @property
-    def user_state(self) -> dict:
-        return self._user_states
+    def cancel_option(self):
+        option_ru = self.options['ru'].get("cancel")
+        option_ky = self.options['ky'].get("cancel")
+        return lambda message: message.text in (option_ru, option_ky)
     
+    def state(self, flag):
+        return lambda message: self._user_states.get(message.chat.id) == flag
+
     def chosen_method(self, call: types.CallbackQuery):
         bank_index = int(call.data) & BANK_MASK
         bank = self.cfg.get("replenish_buttons")[bank_index]
         text = self.cfg.get("chosen_method").format(method=bank)
         chat_id = call.message.chat.id
-        self._user_data[chat_id][FIELD_BANK] = call.data
+        self._user_data[chat_id][FIELD_BANK] = bank
         self._user_states[chat_id] = STATE_WAITING_FOR_NAME | PAYMENT_STATE
         self.bot.edit_message_text(text, call.message.chat.id, call.message.id)
         self.bot.answer_callback_query(call.id, text, show_alert=False)
@@ -137,7 +150,7 @@ class BotService(App):
         bank = self.cfg.get("withdraw_buttons")[bank_index]
         text = self.cfg.get("withdraw_option").format(bank=bank)
         chat_id = call.message.chat.id
-        self._user_data[chat_id][FIELD_BANK] = call.data
+        self._user_data[chat_id][FIELD_BANK] = bank
         self._user_states[chat_id] = STATE_WAITING_FOR_XID | WITHDRAW_STATE
         self.bot.edit_message_text(text, call.message.chat.id, call.message.id)
         self.bot.answer_callback_query(call.id, text, show_alert=False)
@@ -174,9 +187,15 @@ class BotService(App):
             self.bot.send_message(chat_id, self.cfg.get('withdraw_conditions'))
             return
         
-        self._user_states[chat_id] = STATE_WAITING_FOR_PRICE | WITHDRAW_STATE
+        self._clean(chat_id)
+        text = self.cfg.get("handle_price").format(
+                name=self._user_data[chat_id][FIELD_NAME],
+                bank=self._user_data[chat_id][FIELD_BANK],
+                xid=self._user_data[chat_id][FIELD_XID],
+                price=self._user_data[chat_id][FIELD_PRICE]
+        )
         # move to next state
-        self.bot.send_message(chat_id, self.cfg.get("handle_price"))
+        self.bot.send_message(chat_id, text)
     
 
     def handle_price(self, message: types.Message, process_state: int):
@@ -206,9 +225,6 @@ class BotService(App):
         self._user_states[chat_id] = STATE_WAITING_FOR_PHOTO | process_state
         self.bot.send_message(chat_id, self.cfg.get("pay_info").format(price=price))
     
-    def handle_withdraw(self, message: types.Message, xid, price, bank, bank_id):
-        self.bot.send_message(message.chat.id, )
-    
     def handle_photo_check(self, message: types.Message):
         chat_id = message.chat.id
         # identify the type of message 
@@ -222,20 +238,30 @@ class BotService(App):
         photo_path = self.checks_path / f"{chat_id}_check.jpg"
         with open(photo_path, 'wb') as f:
             f.write(downloaded_file)
+        
 
         self._user_data[chat_id][FIELD_PHOTO] = photo_path
         date_time = datetime.now()
         stamp = date_time.strftime("%m%d%y%H%M%S")
-        image_url = self.upload_check_image(photo_path, f"payments/{stamp}_{os.path.basename(photo_path)}")
-        self.add_user_data(self._user_data[chat_id][FIELD_XID], self._user_data[chat_id][FIELD_NAME],
-                           self._user_data[chat_id][FIELD_BANK],self._user_data[chat_id][FIELD_PRICE],
-                            image_url)
-        
+        image_url = self._upload_check_image(photo_path, f"payments/{stamp}_{os.path.basename(photo_path)}")
+
+        dto = PaymentDTO(
+            chat_id,
+            self._user_data[chat_id][FIELD_NAME],
+            self._user_data[chat_id][FIELD_BANK],
+            self._user_data[chat_id][FIELD_XID],
+            datetime.now(),
+            image_url,
+            self._user_data[chat_id][FIELD_PRICE]
+        )
+
+        self._add_user_data(dto)
+
         self.bot.send_message(chat_id, self.cfg.get("report_payment").format(
-            name=self._user_data[chat_id][FIELD_NAME],
-            bank=self._user_data[chat_id][FIELD_BANK],
-            xid=self._user_data[chat_id][FIELD_XID],
-            price=self._user_data[chat_id][FIELD_PRICE]
+            name=dto.name,
+            bank=dto.bank,
+            xid=dto.xid,
+            price=dto.price
         ))
 
         self._clean(chat_id)
@@ -243,19 +269,19 @@ class BotService(App):
     def _clean(self,chat_id):
         if self._user_states.get(chat_id):
             del self._user_states[chat_id]
-        if self._user_data.get(chat_id):
-            del self._user_data[chat_id]    
     
-    def add_user_data(self, user_id, name, bank, price,photo_url):
-        doc_ref = self._db.collection('payment').document(user_id)
-        doc_ref.set({
-            'name': name,
-            'bank': bank,
-            'price': price,
-            'photo': photo_url
-        })
+    def _add_user_data(self, dto: PaymentDTO):
+        doc_ref = self._db.collection('payment').document(str(dto.user_id))
+        dt = asdict(dto)
+        print(dt)
+        doc_ref.set(dt)
 
-    def upload_check_image(self, image_path, image_name):
+    def on_snapshot(self, doc_snapshot, changes, read_time):
+        for doc in doc_snapshot:
+            print(f"received document snapshot: {doc.id}")
+            
+    
+    def _upload_check_image(self, image_path, image_name):
         # Upload an image to Firebase Storage
         blob = self._bucket.blob(image_name)
         blob.upload_from_filename(image_path)
@@ -268,5 +294,25 @@ class BotService(App):
         self.bot.send_message(message.chat.id, self.cfg.get("misunderstanding"))
     
 
+    def instructions(self, message: types.Message):
+        chat_id = message.chat.id
+        inline_markup = types.InlineKeyboardMarkup(row_width=1)
+        replenish_otions = []
+        btns = self.cfg.get('replenish_buttons')
+        if len(btns) < 2:
+            self.bot.send_message(chat_id, self.cfg.get('oops'))
+            return
+        for i,val in enumerate(btns[:2]):
+            btn = types.InlineKeyboardButton(val, callback_data=str(i | PAYMENT_STATE))
+            replenish_otions.append(btn)
+        inline_markup.add(*replenish_otions)
+
+        self.bot.send_message(chat_id, self.cfg.get("instructions"), reply_markup=inline_markup)
     
+    def change_lang(self, message: types.Message):
+        self.toggle_lang()
+        self.home(message)
+
+    
+
     

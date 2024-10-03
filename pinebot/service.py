@@ -122,7 +122,6 @@ class BotService(App):
     
 
     def flood_message(self, message: types.Message):
-        message.te
         self.bot.reply_to(message, self.cfg.get('flood_message'))
 
     def payment_option(self, option):

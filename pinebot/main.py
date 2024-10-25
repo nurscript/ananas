@@ -47,11 +47,11 @@ if __name__ =="__main__":
 
     @bot.message_handler(func=service.state(STATE_WAITING_FOR_PRICE | PAYMENT_STATE))
     def handle_name(message: types.Message):
-        service.handle_price(message, PAYMENT_STATE)
+        service.handle_price(message)
     
     @bot.message_handler(func=service.state(STATE_WAITING_FOR_PRICE | WITHDRAW_STATE))
     def handle_name(message: types.Message):
-        service.handle_price(message, WITHDRAW_STATE) 
+        service.handle_price_withdraw(message) 
 
     @bot.message_handler(func=service.state(STATE_WAITING_FOR_PHOTO | PAYMENT_STATE), content_types=['text', 'photo'])
     def handle_photo_check(message: types.Message):

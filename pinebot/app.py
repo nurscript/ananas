@@ -14,7 +14,7 @@ class App:
         self._lang = lang
         self._token = os.environ['TOKEN']
         self._bot = telebot.TeleBot(self._token)
-        self._min_price = 3000
+        self._min_price = 500
         self._max_price = 100000
         self._configuration = {'ru':{}, 'ky':{}}
         self._load_settings()

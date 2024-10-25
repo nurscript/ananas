@@ -41,6 +41,7 @@ FIELD_PHOTO = "photo"
 FIELD_PRICE = "price"
 FIELD_PAID = "ever_paid"
 FIELD_TIMER = "bomb_timer"
+FIELD_LANG = 'lang'
 
 GUARD_TIME = 2 # prevent flood for 2 seconds
 
@@ -162,7 +163,16 @@ class BotService(App):
     
     def handle_name(self, message: types.Message):
         chat_id = message.chat.id
-        self._user_data[chat_id][FIELD_NAME] = message.text
+        pseudo_name = message.text
+        name_list = pseudo_name.strip().split()
+        # check for name validity
+        for n in name_list:
+            if not n.isalpha():
+                self.bot.send_message(chat_id, self.cfg.get("invalid_name"))
+                return
+            
+        self._user_data[chat_id][FIELD_NAME] = pseudo_name
+
         self._user_states[chat_id] = STATE_WAITING_FOR_XID | PAYMENT_STATE
 
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
@@ -194,21 +204,23 @@ class BotService(App):
         # identify the xid
         msg: str = message.text
         if not (msg.isnumeric() and 14 >=len(msg) >=9):
-            self.bot.send_message(chat_id, self.cfg.get("invalid_xid"))
+            self.bot.send_message(chat_id, self.cfg.get("invalid_account"))
             return
         self._user_data[chat_id][FIELD_XID] = msg
         self._user_states[chat_id] = STATE_WAITING_FOR_PRICE | WITHDRAW_STATE
+
         if not self._user_data[chat_id].get(FIELD_PAID):
             self.bot.send_message(chat_id, self.cfg.get('withdraw_conditions'))
             self._clean(chat_id)
             return
         
+
         text = self.cfg.get("handle_price")
         # move to next state
         self.bot.send_message(chat_id, text)
     
 
-    def handle_price(self, message: types.Message, process_state: int):
+    def handle_price(self, message: types.Message):
         chat_id = message.chat.id
         price = 0
         msg: str = message.text
@@ -221,23 +233,48 @@ class BotService(App):
             return
         
         self._user_data[chat_id][FIELD_PRICE] = price
-        if process_state == WITHDRAW_STATE:
-            text = self.cfg.get('report_withdraw').format(
-                name=self._user_data[chat_id][FIELD_NAME],
-                bank=self._user_data[chat_id][FIELD_BANK],
-                xid=self._user_data[chat_id][FIELD_XID],
-                price=self._user_data[chat_id][FIELD_PRICE]
-            )
-            self._user_states[chat_id] = 0
-            self.bot.send_message(chat_id,text)
-            return
         
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
         markup.add(types.KeyboardButton(self.cfg.get('cancel')))
             
-        self._user_states[chat_id] = STATE_WAITING_FOR_PHOTO | process_state
+        self._user_states[chat_id] = STATE_WAITING_FOR_PHOTO | PAYMENT_STATE
         self.bot.send_message(chat_id, self.cfg.get("pay_info").format(price=price), reply_markup=markup)
-    
+
+    def handle_price_withdraw(self, message : types.Message):
+        chat_id = message.chat.id
+        price = 0
+        msg: str = message.text
+        if not msg.isdecimal():
+            self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            return
+        price = int(msg)
+        if not self._min_price<=price<=self._max_price:
+            self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            return
+        
+        self._user_data[chat_id][FIELD_PRICE] = price
+
+        text = self.cfg.get('report_withdraw').format(
+            name=self._user_data[chat_id][FIELD_NAME],
+            bank=self._user_data[chat_id][FIELD_BANK],
+            xid=self._user_data[chat_id][FIELD_XID],
+            price=self._user_data[chat_id][FIELD_PRICE]
+        )
+        dto = PaymentDTO(
+            chat_id,
+            self._user_data[chat_id][FIELD_NAME],
+            self._user_data[chat_id][FIELD_BANK],
+            self._user_data[chat_id][FIELD_XID],
+            datetime.now(),
+            "",
+            self._user_data[chat_id][FIELD_PRICE]
+        )
+
+        self._add_user_withdraw(dto)
+        self._user_states[chat_id] = 0
+        self.bot.send_message(chat_id,text)
+            
+
     def handle_photo_check(self, message: types.Message):
         chat_id = message.chat.id
         # identify the type of message 
@@ -278,7 +315,7 @@ class BotService(App):
             price=dto.price
         ), reply_markup=markup)
         # if pay transaction is passed
-        self._user_data[chat_id][FIELD_PAID] = True
+        
         self._clean(chat_id)
     
     def _clean(self,chat_id):
@@ -286,15 +323,17 @@ class BotService(App):
             self._user_states[chat_id] = 0
     
     def _add_user_data(self, dto: PaymentDTO):
+        # on payment
         doc_ref = self._db.collection('payment').add(asdict(dto))
-        doc_ref[1].on_snapshot(self.on_snapshot)
+        doc_ref[1].on_snapshot(self.on_snapshot_payment)
 
-    def on_snapshot(self, doc_snapshot, changes , read_time):
+    def _add_user_withdraw(self, dto: PaymentDTO):
+        doc_ref = self._db.collection('withdraw').add(asdict(dto))
+        doc_ref[1].on_snapshot(self.on_snapshot_withdraw)
+
+    def on_snapshot_payment(self, doc_snapshot, changes , read_time):
         for change in changes:
-            print("change ", change)
-            if change.type.name == 'ADDED':
-                print(f"New document: {change.document.id} => {change.document.to_dict()}")
-            elif change.type.name == 'MODIFIED':
+            if change.type.name == 'MODIFIED':
                 payment_item = change.document.to_dict()
                 if payment_item.get("approved"):
                     self.payment_approved(payment_item.get("user_id"),payment_item.get("price"), payment_item.get("xid"), change.document.id )
@@ -303,6 +342,20 @@ class BotService(App):
                 print(f"Removed document: {change.document.id}")
                 payment_item = change.document.to_dict()
                 self.payment_declined(payment_item.get("user_id"))
+
+    def on_snapshot_withdraw(self, doc_snapshot, changes , read_time):
+        for change in changes:
+            if change.type.name == 'MODIFIED':
+                payment_item = change.document.to_dict()
+                if payment_item.get("approved"):
+                    self.withdraw_approved(payment_item.get("user_id"),payment_item.get("price"),payment_item.get("xid") ,payment_item.get("bank"), change.document.id )
+                print(f"Modified document: {change.document.id} => {change.document.to_dict()}")
+            elif change.type.name == 'REMOVED':
+                print(f"Removed document: {change.document.id}")
+                payment_item = change.document.to_dict()
+                self.payment_declined(payment_item.get("user_id"))
+
+    
             
     
     def _upload_check_image(self, image_path, image_name):
@@ -318,7 +371,15 @@ class BotService(App):
         self.bot.send_message(chat_id, self.cfg.get("payment_request_declined"))
     
     def payment_approved(self, chat_id: str, price, xid, doc_id):
+        self._user_data[chat_id][FIELD_PAID] = True
         self.bot.send_message(chat_id, self.cfg.get("payment_request_approved").format(price=price, xid=xid, doc_id=doc_id))
+
+    
+    def withdraw_approved(self, chat_id: str, price, xid, bank , doc_id):
+        self._user_data[chat_id][FIELD_PAID] = True
+        self.bot.send_message(chat_id, self.cfg.get("withdraw_request_approved").format(price=price, xid=xid,bank=bank, doc_id=doc_id))
+
+    
     
     def misunderstand(self, message: types.Message):
         self.bot.send_message(message.chat.id, self.cfg.get("misunderstanding"))

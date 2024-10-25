@@ -10,6 +10,8 @@ import os
 from datetime import datetime
 from dataclasses import dataclass, asdict
 
+from typing import List
+
 # Define the different states using powers of 2
 STATE_WAITING_FOR_NAME = 1 << 0  # 0001
 STATE_WAITING_FOR_XID = 1 << 1   # 0010
@@ -51,8 +53,7 @@ class PaymentDTO:
     time: datetime
     photo: str
     price: int
-    ever_paid: bool = False
-    approved: str = "neutral"
+    approved: bool = False
 
 
     
@@ -288,14 +289,20 @@ class BotService(App):
         doc_ref = self._db.collection('payment').add(asdict(dto))
         doc_ref[1].on_snapshot(self.on_snapshot)
 
-    def on_snapshot(self, doc_snapshot, changes, read_time):
+    def on_snapshot(self, doc_snapshot, changes , read_time):
         for change in changes:
+            print("change ", change)
             if change.type.name == 'ADDED':
                 print(f"New document: {change.document.id} => {change.document.to_dict()}")
             elif change.type.name == 'MODIFIED':
+                payment_item = change.document.to_dict()
+                if payment_item.get("approved"):
+                    self.payment_approved(payment_item.get("user_id"),payment_item.get("price"), payment_item.get("xid"), change.document.id )
                 print(f"Modified document: {change.document.id} => {change.document.to_dict()}")
             elif change.type.name == 'REMOVED':
                 print(f"Removed document: {change.document.id}")
+                payment_item = change.document.to_dict()
+                self.payment_declined(payment_item.get("user_id"))
             
     
     def _upload_check_image(self, image_path, image_name):
@@ -306,6 +313,12 @@ class BotService(App):
         blob.make_public()
         # Get the public URL of the uploaded image
         return blob.public_url
+    
+    def payment_declined(self, chat_id: str):
+        self.bot.send_message(chat_id, self.cfg.get("payment_request_declined"))
+    
+    def payment_approved(self, chat_id: str, price, xid, doc_id):
+        self.bot.send_message(chat_id, self.cfg.get("payment_request_approved").format(price=price, xid=xid, doc_id=doc_id))
     
     def misunderstand(self, message: types.Message):
         self.bot.send_message(message.chat.id, self.cfg.get("misunderstanding"))

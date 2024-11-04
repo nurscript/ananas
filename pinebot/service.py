@@ -9,7 +9,7 @@ from firebase_admin import credentials, firestore, storage
 import os
 from datetime import datetime
 from dataclasses import dataclass, asdict
-
+from datetime import timedelta
 from typing import List
 
 # Define the different states using powers of 2
@@ -363,9 +363,10 @@ class BotService(App):
         blob = self._bucket.blob(image_name)
         blob.upload_from_filename(image_path)
         # Make the image publicly accessible
-        blob.make_public()
+        # blob.make_public()
         # Get the public URL of the uploaded image
-        return blob.public_url
+        m_url = blob.generate_signed_url(timedelta(weeks=2))
+        return m_url
     
     def payment_declined(self, chat_id: str):
         self.bot.send_message(chat_id, self.cfg.get("payment_request_declined"))

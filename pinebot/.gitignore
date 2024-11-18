@@ -1,2 +1,4 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+/env
+devilstore-95042-firebase-adminsdk-42e0j-f98e9de63c.json

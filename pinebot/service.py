@@ -78,14 +78,15 @@ class BotService(App):
     def home(self, message: types.Message):
         chat_id = message.chat.id
         self._clean(chat_id)
+        self.init_lang(message)
         markup = types.ReplyKeyboardMarkup(row_width=2)
         collection = []
-        for val in self.cfg.get("start_buttons"):
+        for val in self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("start_buttons"):
             btn = types.KeyboardButton(val)
             collection.append(btn)
         markup.add(*collection)
         
-        msg = self.cfg.get("start").format(name=message.chat.first_name,
+        msg = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("start").format(name=message.chat.first_name,
                                     last_name=message.chat.last_name)
         
         self.bot.send_message(chat_id, msg, reply_markup=markup)
@@ -95,14 +96,14 @@ class BotService(App):
         chat_id = message.chat.id
         inline_markup = types.InlineKeyboardMarkup(row_width=1)
         replenish_otions = []
-        for i,val in enumerate(self.cfg.get('replenish_buttons')):
+        for i,val in enumerate(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('replenish_buttons')):
             btn = types.InlineKeyboardButton(val, callback_data=str(i | PAYMENT_STATE))
             replenish_otions.append(btn)
         inline_markup.add(*replenish_otions)
 
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
-        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
-        text = self.cfg.get('replenish_message')
+        markup.add(types.KeyboardButton(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('cancel')))
+        text = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('replenish_message')
         self.bot.send_message(chat_id, '📥',reply_markup=markup)
         self.bot.send_message(chat_id, text, reply_markup=inline_markup)
 
@@ -111,20 +112,21 @@ class BotService(App):
         chat_id = message.chat.id
         inline_markup = types.InlineKeyboardMarkup(row_width=1)
         withdraw_options = []
-        for i, val in enumerate(self.cfg.get('withdraw_buttons')):
+        for i, val in enumerate(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('withdraw_buttons')):
             btn = types.InlineKeyboardButton(val, callback_data=str(i | WITHDRAW_STATE))
             withdraw_options.append(btn)
         inline_markup.add(*withdraw_options)
     
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
-        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
-        text = self.cfg.get('withdraw_message')
+        markup.add(types.KeyboardButton(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('cancel')))
+        text = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('withdraw_message')
         self.bot.send_message(chat_id, '📤',reply_markup=markup)
         self.bot.send_message(chat_id, text, reply_markup=inline_markup)
     
 
     def flood_message(self, message: types.Message):
-        self.bot.reply_to(message, self.cfg.get('flood_message'))
+        chat_id = message.chat.id
+        self.bot.reply_to(message, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('flood_message'))
 
     def payment_option(self, option):
         option_ru = self.options['ru'].get("start_buttons")[option]
@@ -140,25 +142,25 @@ class BotService(App):
         return lambda message: self._user_states.get(message.chat.id) == flag
 
     def chosen_method(self, call: types.CallbackQuery):
-        bank_index = int(call.data) & BANK_MASK
-        bank = self.cfg.get("replenish_buttons")[bank_index]
-        text = self.cfg.get("chosen_method").format(method=bank)
         chat_id = call.message.chat.id
+        bank_index = int(call.data) & BANK_MASK
+        bank = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("replenish_buttons")[bank_index]
+        text = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("chosen_method").format(method=bank)
         self._user_data[chat_id][FIELD_BANK] = bank
         self._user_states[chat_id] = STATE_WAITING_FOR_NAME | PAYMENT_STATE
         self.bot.edit_message_text(text, call.message.chat.id, call.message.id)
         self.bot.answer_callback_query(call.id, text, show_alert=False)
     
     def withdraw_option(self, call: types.CallbackQuery):
-        bank_index = int(call.data) & BANK_MASK
-        bank = self.cfg.get("withdraw_buttons")[bank_index]
-        text = self.cfg.get("withdraw_option").format(bank=bank)
         chat_id = call.message.chat.id
+        bank_index = int(call.data) & BANK_MASK
+        bank = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("withdraw_buttons")[bank_index]
+        text = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("withdraw_option").format(bank=bank)
         self._user_data[chat_id][FIELD_BANK] = bank
         self._user_states[chat_id] = STATE_WAITING_FOR_XID | WITHDRAW_STATE
         self.bot.edit_message_text(text, call.message.chat.id, call.message.id)
         self.bot.answer_callback_query(call.id, text, show_alert=False)
-        self.bot.send_message(chat_id, self.cfg.get('withdraw_request_bank_id'))
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('withdraw_request_bank_id'))
 
     
     def handle_name(self, message: types.Message):
@@ -168,7 +170,7 @@ class BotService(App):
         # check for name validity
         for n in name_list:
             if not n.isalpha():
-                self.bot.send_message(chat_id, self.cfg.get("invalid_name"))
+                self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_name"))
                 return
             
         self._user_data[chat_id][FIELD_NAME] = pseudo_name
@@ -178,15 +180,15 @@ class BotService(App):
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
         if self._user_data[chat_id].get(FIELD_XID):
           markup.add(types.KeyboardButton(self._user_data[chat_id].get(FIELD_XID)))
-        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
-        self.bot.send_message(chat_id, self.cfg.get("handle_xid"), reply_markup=markup)
+        markup.add(types.KeyboardButton(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('cancel')))
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("handle_xid"), reply_markup=markup)
     
     def handle_xid(self, message: types.Message):
         chat_id = message.chat.id
         # identify the xid
         msg: str = message.text
         if not (msg.isnumeric() and 14 >=len(msg) >=9):
-            self.bot.send_message(chat_id, self.cfg.get("invalid_xid"))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_xid"))
             return
         self._user_data[chat_id][FIELD_XID] = msg
         self._user_states[chat_id] = STATE_WAITING_FOR_PRICE | PAYMENT_STATE
@@ -195,27 +197,27 @@ class BotService(App):
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
         if self._user_data[chat_id].get(FIELD_PRICE):
             markup.add(types.KeyboardButton(self._user_data[chat_id].get(FIELD_PRICE)))
-        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
+        markup.add(types.KeyboardButton(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('cancel')))
         # move to next state
-        self.bot.send_message(chat_id, self.cfg.get("handle_price"), reply_markup=markup)
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("handle_price"), reply_markup=markup)
     
     def handle_xid_withdraw(self, message: types.Message):
         chat_id = message.chat.id
         # identify the xid
         msg: str = message.text
         if not (msg.isnumeric() and 14 >=len(msg) >=9):
-            self.bot.send_message(chat_id, self.cfg.get("invalid_account"))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_account"))
             return
         self._user_data[chat_id][FIELD_XID] = msg
         self._user_states[chat_id] = STATE_WAITING_FOR_PRICE | WITHDRAW_STATE
 
         if not self._user_data[chat_id].get(FIELD_PAID):
-            self.bot.send_message(chat_id, self.cfg.get('withdraw_conditions'))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('withdraw_conditions'))
             self._clean(chat_id)
             return
         
 
-        text = self.cfg.get("handle_price")
+        text = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("handle_price")
         # move to next state
         self.bot.send_message(chat_id, text)
     
@@ -225,36 +227,36 @@ class BotService(App):
         price = 0
         msg: str = message.text
         if not msg.isdecimal():
-            self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_price"))
             return
         price = int(msg)
         if not self._min_price<=price<=self._max_price:
-            self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_price"))
             return
         
         self._user_data[chat_id][FIELD_PRICE] = price
         
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
-        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
+        markup.add(types.KeyboardButton(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('cancel')))
             
         self._user_states[chat_id] = STATE_WAITING_FOR_PHOTO | PAYMENT_STATE
-        self.bot.send_message(chat_id, self.cfg.get("pay_info").format(price=price), reply_markup=markup)
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("pay_info").format(price=price), reply_markup=markup)
 
     def handle_price_withdraw(self, message : types.Message):
         chat_id = message.chat.id
         price = 0
         msg: str = message.text
         if not msg.isdecimal():
-            self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_price"))
             return
         price = int(msg)
         if not self._min_price<=price<=self._max_price:
-            self.bot.send_message(chat_id, self.cfg.get("invalid_price"))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_price"))
             return
         
         self._user_data[chat_id][FIELD_PRICE] = price
 
-        text = self.cfg.get('report_withdraw').format(
+        text = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('report_withdraw').format(
             name=self._user_data[chat_id][FIELD_NAME],
             bank=self._user_data[chat_id][FIELD_BANK],
             xid=self._user_data[chat_id][FIELD_XID],
@@ -307,8 +309,8 @@ class BotService(App):
 
         self._add_user_data(dto)
         markup = types.ReplyKeyboardMarkup(row_width=4, resize_keyboard=True)
-        markup.add(types.KeyboardButton(self.cfg.get('cancel')))
-        self.bot.send_message(chat_id, self.cfg.get("report_payment").format(
+        markup.add(types.KeyboardButton(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('cancel')))
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("report_payment").format(
             name=dto.name,
             bank=dto.bank,
             xid=dto.xid,
@@ -369,50 +371,58 @@ class BotService(App):
         return m_url
     
     def payment_declined(self, chat_id: str):
-        self.bot.send_message(chat_id, self.cfg.get("payment_request_declined"))
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("payment_request_declined"))
     
     def payment_approved(self, chat_id: str, price, xid, doc_id):
         self._user_data[chat_id][FIELD_PAID] = True
-        self.bot.send_message(chat_id, self.cfg.get("payment_request_approved").format(price=price, xid=xid, doc_id=doc_id))
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("payment_request_approved").format(price=price, xid=xid, doc_id=doc_id))
 
     
     def withdraw_approved(self, chat_id: str, price, xid, bank , doc_id):
         self._user_data[chat_id][FIELD_PAID] = True
-        self.bot.send_message(chat_id, self.cfg.get("withdraw_request_approved").format(price=price, xid=xid,bank=bank, doc_id=doc_id))
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("withdraw_request_approved").format(price=price, xid=xid,bank=bank, doc_id=doc_id))
 
     
     
     def misunderstand(self, message: types.Message):
-        self.bot.send_message(message.chat.id, self.cfg.get("misunderstanding"))
+        chat_id = message.chat.id
+        self.bot.send_message(message.chat.id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("misunderstanding"))
     
 
     def instructions(self, message: types.Message):
         chat_id = message.chat.id
         inline_markup = types.InlineKeyboardMarkup(row_width=1)
         replenish_otions = []
-        btns = self.cfg.get('start_buttons')
+        btns = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('start_buttons')
         if len(btns) < 2:
-            self.bot.send_message(chat_id, self.cfg.get('oops'))
+            self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('oops'))
             return
         for i,val in enumerate(btns[:2]):
             btn = types.InlineKeyboardButton(val, callback_data=str(i | INSTRUCTION_STATE))
             replenish_otions.append(btn)
         inline_markup.add(*replenish_otions)
-        self.bot.send_message(chat_id, self.cfg.get("instructions"), reply_markup=inline_markup)
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("instructions"), reply_markup=inline_markup)
     
     def get_tutorial(self, callback: types.CallbackQuery):
-        button_index = int(callback.data) & 3
-        button = self.cfg.get("start_buttons")[button_index]
         chat_id = callback.message.chat.id
+        button_index = int(callback.data) & 3
+        button = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("start_buttons")[button_index]
         if button_index == 0:
             self.bot.send_message(chat_id,f"Tutorial: {button}")
         elif button_index == 1:
             self.bot.send_message(chat_id,f"Urok: {button}")
 
     def change_lang(self, message: types.Message):
-        self.toggle_lang()
+        chat_id = message.chat.id
+        self._user_data[chat_id][FIELD_LANG] = "ky" if self._lang == "ru" else "ru"
         self.home(message)
 
+    
+    def init_lang(self, message: types.Message):
+        chat_id = message.chat.id
+        if self._user_data[chat_id].get(FIELD_LANG) is None :
+            self._user_data[chat_id][FIELD_LANG] = 'ru'
+    
     
 
     

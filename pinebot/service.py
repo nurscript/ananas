@@ -88,12 +88,12 @@ class BotService(App):
         
         msg = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("start").format(name=message.chat.first_name,
                                     last_name=message.chat.last_name)
-        
         self.bot.send_message(chat_id, msg, reply_markup=markup)
     
     @flood_guard(GUARD_TIME)
     def choose_payment(self, message: types.Message):
         chat_id = message.chat.id
+        self.init_lang(message)
         inline_markup = types.InlineKeyboardMarkup(row_width=1)
         replenish_otions = []
         for i,val in enumerate(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('replenish_buttons')):
@@ -110,6 +110,7 @@ class BotService(App):
     @flood_guard(GUARD_TIME)
     def choose_withdraw(self, message: types.Message):
         chat_id = message.chat.id
+        self.init_lang(message)
         inline_markup = types.InlineKeyboardMarkup(row_width=1)
         withdraw_options = []
         for i, val in enumerate(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('withdraw_buttons')):
@@ -165,6 +166,7 @@ class BotService(App):
     
     def handle_name(self, message: types.Message):
         chat_id = message.chat.id
+        self.init_lang(message)
         pseudo_name = message.text
         name_list = pseudo_name.strip().split()
         # check for name validity
@@ -187,6 +189,7 @@ class BotService(App):
         chat_id = message.chat.id
         # identify the xid
         msg: str = message.text
+        self.init_lang(message)
         if not (msg.isnumeric() and 14 >=len(msg) >=9):
             self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_xid"))
             return
@@ -204,6 +207,7 @@ class BotService(App):
     def handle_xid_withdraw(self, message: types.Message):
         chat_id = message.chat.id
         # identify the xid
+        self.init_lang(message)
         msg: str = message.text
         if not (msg.isnumeric() and 14 >=len(msg) >=9):
             self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_account"))
@@ -225,6 +229,7 @@ class BotService(App):
     def handle_price(self, message: types.Message):
         chat_id = message.chat.id
         price = 0
+        self.init_lang(message)
         msg: str = message.text
         if not msg.isdecimal():
             self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_price"))
@@ -240,11 +245,12 @@ class BotService(App):
         markup.add(types.KeyboardButton(self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('cancel')))
             
         self._user_states[chat_id] = STATE_WAITING_FOR_PHOTO | PAYMENT_STATE
-        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("pay_info").format(price=price), reply_markup=markup)
+        self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("pay_info").format(price=price), reply_markup=markup,  parse_mode='MarkdownV2')
 
     def handle_price_withdraw(self, message : types.Message):
         chat_id = message.chat.id
         price = 0
+        self.init_lang(message)
         msg: str = message.text
         if not msg.isdecimal():
             self.bot.send_message(chat_id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("invalid_price"))
@@ -279,6 +285,7 @@ class BotService(App):
 
     def handle_photo_check(self, message: types.Message):
         chat_id = message.chat.id
+        self.init_lang(message)
         # identify the type of message 
         print(message.content_type)
         if message.content_type != "photo":
@@ -386,11 +393,13 @@ class BotService(App):
     
     def misunderstand(self, message: types.Message):
         chat_id = message.chat.id
+        self.init_lang(message)
         self.bot.send_message(message.chat.id, self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get("misunderstanding"))
     
 
     def instructions(self, message: types.Message):
         chat_id = message.chat.id
+        self.init_lang(message)
         inline_markup = types.InlineKeyboardMarkup(row_width=1)
         replenish_otions = []
         btns = self.cfg(self._user_data[chat_id].get(FIELD_LANG)).get('start_buttons')
@@ -414,7 +423,7 @@ class BotService(App):
 
     def change_lang(self, message: types.Message):
         chat_id = message.chat.id
-        self._user_data[chat_id][FIELD_LANG] = "ky" if self._lang == "ru" else "ru"
+        self._user_data[chat_id][FIELD_LANG] = "ky" if self._user_data[chat_id][FIELD_LANG] == "ru" else "ru"
         self.home(message)
 
     
